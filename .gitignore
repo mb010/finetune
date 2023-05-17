@@ -1,0 +1,14 @@
+data
+sweep-cfg.txt
+notebooks
+astroaugmentations
+*.npy
+__pycache__
+*ipynb*
+.ipynb*
+
+.vscode
+files/wandb
+
+*.egg-info
+*.cpkt

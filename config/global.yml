@@ -1,0 +1,37 @@
+type: 'byol'
+project_name: 'FineTune'
+
+trainer:
+  gpus: 1
+  num_nodes: 1
+  debug: True
+  n_epochs: 100
+  precision: 32 # [16, 32, 'bf16'], often overriden
+  deterministic: True
+  
+finetune:
+  iterations: 1
+  n_layers: 2 
+  lr_decay: 0.75
+  n_epochs: 100
+  batch_size: 1024
+
+data:
+  dataset: 'rgz' # ['imagenette', 'rgz', 'gzmnist', 'gz2', 'stl10', 'cifar10']
+  test_size: 0.3
+
+  # augmentations
+  center_crop_size: 80
+  random_crop_scale: !!python/tuple [0.8, 1]
+
+  # dataloader options
+  batch_size: 500 # training batch size
+  val_batch_size: 500 # validation batch size
+
+  dataloader: 
+    num_workers: 8  # often overriden
+    prefetch_factor: 30
+    persistent_workers: False  # torch default is False
+    pin_memory: True
+
+
