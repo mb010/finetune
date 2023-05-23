@@ -227,7 +227,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                 "MB_conf_test": MiraBest_FITS(
                     self.path,
                     train=False,
-                    test_size=None,
+                    test_size=0.2,
                     transform=self.T_test,
                     df_filter=confident_only,
                 ),
@@ -252,7 +252,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                 MiraBest_FITS(
                     self.path,
                     train=True,
-                    test_size=None,
+                    test_size=0.2,
                     transform=self.T_train,
                     df_filter=confident_only,
                 ),
@@ -263,7 +263,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                 MiraBest_FITS(
                     self.path,
                     train=True,
-                    test_size=None,
+                    test_size=0.2,
                     transform=self.T_test,
                     df_filter=confident_only,
                 ),
