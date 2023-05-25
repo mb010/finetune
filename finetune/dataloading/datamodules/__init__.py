@@ -1,4 +1,4 @@
-from .rgz import *
+from .rgz import RGZ_DataModule_Finetune, MiraBest_FITS_DataModule_Finetune
 
 finetune_datasets = {
     # "stl10": STL10_DataModule,
