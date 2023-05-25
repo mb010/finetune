@@ -391,6 +391,15 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                 ),
             }
         )
+        self.data["val"] = MiraBest_FITS(
+            self.path,
+            train=True,
+            test_size=self.test_size,
+            transform=self.train_transform,
+            data_type=self.data_type,
+            df_filter=confident_only,
+            aug_type="albumentations",
+        )
         self.data["train"] = MiraBest_FITS(
             self.path,
             train=True,
