@@ -223,6 +223,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
         fft: bool = True,  # TODO
         png: bool = False,  # TODO
         nchan: int = 3,
+        test_size: float = 0.2,
         **kwargs,
     ):
         super().__init__(
@@ -255,11 +256,12 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
         self.fft = fft
         self.png = png
         self.nchan = nchan
+        self.test_size = test_size
         self.train_transform, self.test_transform, self.eval_transform = self._build_transforms()
 
     def _repeat_array(self, arr, repetitions):
         arr = arr[np.newaxis, :]
-        return np.repeat(arr_3d, repetitions, axis=0)
+        return np.repeat(arr, repetitions, axis=0)
 
     def _build_transforms(self):
         # Handle fft and channel shape conditions
@@ -372,6 +374,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                 "MB_conf_test": MiraBest_FITS(
                     root=self.path,
                     train=False,
+                    test_size=self.test_size,
                     transform=self.eval_transform,
                     data_type=self.data_type,
                     df_filter=confident_only,
@@ -380,6 +383,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                 "MB_nohybrid_test": MiraBest_FITS(
                     root=self.path,
                     train=False,
+                    test_size=self.test_size,
                     transform=self.eval_transform,
                     data_type=self.data_type,
                     df_filter=no_hybrid,
@@ -390,9 +394,9 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
         self.data["train"] = MiraBest_FITS(
             self.path,
             train=True,
-            test_size=self.config["finetune"]["val_size"],
+            test_size=self.test_size,
             transform=self.train_transform,
             data_type=self.data_type,
             df_filter=confident_only,
-            aug_type="albumentations",  # TODO CHECK THAT THIS IS A PARAMETER IN THE MIRABEST FITS DATA SET.
+            aug_type="albumentations",
         )
