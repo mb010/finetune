@@ -189,7 +189,7 @@ def no_hybrid(df):
     return df.reset_index(drop=True)
 
 
-class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule, FITS_DataModule):
+class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
     def __init__(
         self,
         config,
@@ -208,21 +208,21 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule, FITS_DataModule):
         nchan: int = 3,
         **kwargs,
     ):
-        super().__init__(config)
-        super(FITS_DataModule, self).__init__(
-            path,
-            batch_size,
-            num_workers,
-            prefetch_factor,
-            persistent_workers,
-            pin_memory,
-            img_size,
-            MiraBest_FITS_root,
-            data_type,
-            astroaugment,
-            fft,
-            png,
-            nchan,
+        super(MiraBest_FITS_DataModule_Finetune, self).__init__(
+            config=config,
+            path=path,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            prefetch_factor=prefetch_factor,
+            persistent_workers=persistent_workers,
+            pin_memory=pin_memory,
+            img_size=img_size,
+            MiraBest_FITS_root=MiraBest_FITS_root,
+            data_type=data_type,
+            astroaugment=astroaugment,
+            fft=fft,
+            png=png,
+            nchan=nchan,
             **kwargs,
         )
 
