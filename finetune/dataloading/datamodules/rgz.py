@@ -7,6 +7,7 @@ from torch.utils.data import Subset
 from collections import OrderedDict
 from mae.dataloading.datamodules.fits import FITS_DataModule
 from typing import Dict, Union
+import torch
 
 if sys.version_info[0] == 2:
     import cPickle as pickle
