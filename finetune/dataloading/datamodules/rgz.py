@@ -34,7 +34,7 @@ from astroaugmentations.datasets.MiraBest_F import (
 
 class FineTuning_DataModule(pl.LightningDataModule):
     def __init__(self, config):
-        super().__init__()
+        super().__init__(config["dataset"], config["finetune"]["batch_size"])
 
         # override default paths via config if desired
         paths = Path_Handler(**config.get("paths_to_override", {}))
@@ -54,8 +54,8 @@ class FineTuning_DataModule(pl.LightningDataModule):
         loader = DataLoader(
             self.data["train"],
             batch_size=self.config["finetune"]["batch_size"],
-            num_workers=8,  # TODO
-            prefetch_factor=30,  # TODO parameterise
+            num_workers=self.config["data"]["num_workers"],
+            prefetch_factor=self.config["data"]["prefetch_factor"],
             shuffle=True,
         )
         return loader
