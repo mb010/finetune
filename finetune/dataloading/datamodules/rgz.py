@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 from torch.utils.data import Subset
 from collections import OrderedDict
-from mae.dataloading.datamodules.fits import FITS_DataModule
+from mae.dataloading.datamodules.vision import Base_DataModule
 from typing import Dict, Union
 import torch
 
@@ -29,21 +29,31 @@ from astroaugmentations.datasets.MiraBest_F import (
 )
 
 
-# TODO get aug parameters like center_crop from loaded model
-
-
 class FineTuning_DataModule(pl.LightningDataModule):
-    def __init__(self, config):
+    def __init__(
+        self,
+        path,
+        batch_size: int,
+        num_workers: int = 8,
+        prefetch_factor: int = 30,
+        persistent_workers: bool = True,
+        pin_memory: bool = True,
+        **kwargs,
+    ):
+        """
+        Args:
+            path: path to dataset
+            batch_size: batch size
+        """
         super().__init__()
 
-        # override default paths via config if desired
-        paths = Path_Handler(**config.get("paths_to_override", {}))
-        path_dict = paths._dict()
-        self.path = path_dict[config["dataset"]]
+        self.path = path
+        self.batch_size = batch_size
 
-        self.config = config
-
-        self.mu, self.sig = config["data"]["mu"], config["data"]["sig"]
+        self.num_workers = num_workers
+        self.prefetch_factor = prefetch_factor
+        self.persistent_workers = persistent_workers
+        self.pin_memory = pin_memory
 
         self.data = {}
 
@@ -53,9 +63,9 @@ class FineTuning_DataModule(pl.LightningDataModule):
     def train_dataloader(self):
         loader = DataLoader(
             self.data["train"],
-            batch_size=self.config["finetune"]["batch_size"],
-            num_workers=self.config["data"]["num_workers"],
-            prefetch_factor=self.config["data"]["prefetch_factor"],
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            prefetch_factor=self.prefetch_factor,
             shuffle=True,
         )
         return loader
@@ -63,16 +73,23 @@ class FineTuning_DataModule(pl.LightningDataModule):
     def val_dataloader(self):
         loader = DataLoader(
             self.data["val"],
-            batch_size=200,
-            num_workers=8,
-            prefetch_factor=30,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            prefetch_factor=self.prefetch_factor,
             shuffle=False,
         )
         return loader
 
     def test_dataloader(self):
         loaders = [
-            DataLoader(data, **self.config["val_dataloader"]) for data in self.data["test"].values()
+            DataLoader(
+                data,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                prefetch_factor=self.prefetch_factor,
+                shuffle=False,
+            )
+            for data in self.data["test"].values()
         ]
         return loaders
 
@@ -189,10 +206,9 @@ def no_hybrid(df):
     return df.reset_index(drop=True)
 
 
-class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
+class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
     def __init__(
         self,
-        config,
         path,
         batch_size: int,
         num_workers: int = 1,
@@ -200,7 +216,6 @@ class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
         persistent_workers: bool = False,
         pin_memory: bool = True,
         img_size: bool = 128,
-        MiraBest_FITS_root: str = "/share/nas2_5/mbowles/_data/MiraBest_FITS",
         data_type: Union[str, type] = torch.float32,
         astroaugment: bool = True,
         fft: bool = True,  # TODO
@@ -208,23 +223,146 @@ class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
         nchan: int = 3,
         **kwargs,
     ):
-        super(MiraBest_FITS_DataModule_Finetune, self).__init__(
-            config=config,
-            path=path,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            prefetch_factor=prefetch_factor,
-            persistent_workers=persistent_workers,
-            pin_memory=pin_memory,
-            img_size=img_size,
-            MiraBest_FITS_root=MiraBest_FITS_root,
-            data_type=data_type,
-            astroaugment=astroaugment,
-            fft=fft,
-            png=png,
-            nchan=nchan,
+        super().__init__(
+            path,
+            batch_size,
+            num_workers,
+            prefetch_factor,
+            persistent_workers,
+            pin_memory,
             **kwargs,
         )
+        self.mu = (0.485, 0.456, 0.406)
+        self.sig = (0.229, 0.224, 0.225)
+        self.img_size = img_size
+        self.data_type = {
+            "torch.float32": torch.float32,
+            "16-mixed": torch.bfloat16,
+            "bf16-mixed": torch.bfloat16,
+            "32-true": torch.float32,
+            "64-true": torch.float64,
+            64: torch.float64,
+            32: torch.float32,
+            16: torch.float16,
+            "64": torch.float64,
+            "32": torch.float32,
+            "16": torch.float16,
+            "bf16": torch.bfloat16,
+        }[data_type]
+        self.astroaugment = astroaugment
+        self.fft = fft
+        self.png = png
+        self.nchan = nchan
+        self.train_transform, self.test_transform, self.eval_transform = self._build_transforms()
+
+    def _repeat_array(self, arr, repetitions):
+        arr = arr[np.newaxis, :]
+        return np.repeat(arr_3d, repetitions, axis=0)
+
+    def _build_transforms(self):
+        # Handle fft and channel shape conditions
+        if self.fft:
+            if self.nchan == 3:
+                out = [np.real, np.imag, np.angle]
+            elif self.nchan == 2:
+                out = [np.real, np.imag]
+        else:
+            out = [np.asarray for i in range(self.nchan)]
+        # Handle astroaugment and fft parameters
+        train_transform = [A.CenterCrop(self.img_size, self.img_size)]
+        test_transform = [A.CenterCrop(self.img_size, self.img_size)]
+        eval_transform = [A.CenterCrop(self.img_size, self.img_size)]
+        if self.astroaugment:
+            train_transform.append(
+                A.Lambda(
+                    name="UVAugmentation",
+                    image=AA.image_domain.radio.UVAugmentation(
+                        dropout_p=0.8,
+                        dropout_mag=0.5,  # RFI Overflagging
+                        noise_p=0.5,
+                        noise_mag=0.5,  # Noise Injection
+                        rfi_p=0.5,
+                        rfi_mag=1,
+                        rfi_prob=0.01,  # RFI injection
+                        fft=self.fft,
+                        out=out,
+                    ),
+                    p=1,
+                )
+            )
+            test_transform.append(
+                A.Lambda(
+                    name="UVAugmentation",
+                    image=AA.image_domain.radio.UVAugmentation(  # Fourrier transform the same way as before.
+                        dropout_p=0.0,  # RFI Overflagging
+                        noise_p=0.0,  # Noise Injection
+                        rfi_p=0.0,  # RFI injection
+                        fft=self.fft,
+                        out=out,
+                    ),
+                    p=1,
+                )
+            )
+            eval_transform.append(
+                A.Lambda(
+                    name="UVAugmentation",
+                    image=AA.image_domain.radio.UVAugmentation(  # Fourrier transform the same way as before.
+                        dropout_p=0.0,  # RFI Overflagging
+                        noise_p=0.0,  # Noise Injection
+                        rfi_p=0.0,  # RFI injection
+                        fft=self.fft,
+                        out=out,
+                    ),
+                    p=1,
+                )
+            )
+        else:
+            train_transform.append(
+                A.Lambda(
+                    name="UVAugmentation",
+                    image=AA.image_domain.radio.UVAugmentation(  # Fourrier transform the same way as before.
+                        dropout_p=0.0,  # RFI Overflagging
+                        noise_p=0.0,  # Noise Injection
+                        rfi_p=0.0,  # RFI injection
+                        fft=self.fft,
+                        out=out,
+                    ),
+                    p=1,
+                )
+            )
+            test_transform.append(
+                A.Lambda(
+                    name="UVAugmentation",
+                    image=AA.image_domain.radio.UVAugmentation(  # Fourrier transform the same way as before.
+                        dropout_p=0.0,  # RFI Overflagging
+                        noise_p=0.0,  # Noise Injection
+                        rfi_p=0.0,  # RFI injection
+                        fft=self.fft,
+                        out=out,
+                    ),
+                    p=1,
+                )
+            )
+            eval_transform.append(
+                A.Lambda(
+                    name="UVAugmentation",
+                    image=AA.image_domain.radio.UVAugmentation(  # Fourrier transform the same way as before.
+                        dropout_p=0.0,  # RFI Overflagging
+                        noise_p=0.0,  # Noise Injection
+                        rfi_p=0.0,  # RFI injection
+                        fft=self.fft,
+                        out=out,
+                    ),
+                    p=1,
+                )
+            )
+        # Handle png parameter
+        if self.png:
+            train_transform.append(A.Lambda(name="png_norm", image=AA.image_domain.NaivePNGnorm(), p=1))
+            test_transform.append(A.Lambda(name="png_norm", image=AA.image_domain.NaivePNGnorm(), p=1))
+            eval_transform.append(A.Lambda(name="png_norm", image=AA.image_domain.NaivePNGnorm(), p=1))
+
+        return A.Compose(train_transform), A.Compose(test_transform), A.Compose(eval_transform)
 
     def setup(self):
         self.data["test"] = OrderedDict(
@@ -235,6 +373,7 @@ class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
                     transform=self.eval_transform,
                     data_type=self.data_type,
                     df_filter=confident_only,
+                    aug_type="albumentations",
                 ),
                 "MB_nohybrid_test": MiraBest_FITS(
                     root=self.MiraBest_FITS_root,
@@ -242,6 +381,7 @@ class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
                     transform=self.eval_transform,
                     data_type=self.data_type,
                     df_filter=no_hybrid,
+                    aug_type="albumentations",
                 ),
             }
         )
@@ -252,4 +392,5 @@ class MiraBest_FITS_DataModule_Finetune(FITS_DataModule, FineTuning_DataModule):
             transform=self.train_transform,
             data_type=self.data_type,
             df_filter=confident_only,
+            aug_type="albumentations",  # TODO CHECK THAT THIS IS A PARAMETER IN THE MIRABEST FITS DATA SET.
         )
