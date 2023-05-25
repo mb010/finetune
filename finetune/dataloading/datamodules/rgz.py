@@ -370,7 +370,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
         self.data["test"] = OrderedDict(
             {
                 "MB_conf_test": MiraBest_FITS(
-                    root=self.MiraBest_FITS_root,
+                    root=self.path,
                     train=False,
                     transform=self.eval_transform,
                     data_type=self.data_type,
@@ -378,7 +378,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
                     aug_type="albumentations",
                 ),
                 "MB_nohybrid_test": MiraBest_FITS(
-                    root=self.MiraBest_FITS_root,
+                    root=self.path,
                     train=False,
                     transform=self.eval_transform,
                     data_type=self.data_type,
