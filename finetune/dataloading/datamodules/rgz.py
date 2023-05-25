@@ -366,7 +366,7 @@ class MiraBest_FITS_DataModule_Finetune(FineTuning_DataModule):
 
         return A.Compose(train_transform), A.Compose(test_transform), A.Compose(eval_transform)
 
-    def setup(self):
+    def setup(self, stage=None):
         self.data["test"] = OrderedDict(
             {
                 "MB_conf_test": MiraBest_FITS(
