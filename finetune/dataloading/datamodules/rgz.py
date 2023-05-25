@@ -34,7 +34,7 @@ from astroaugmentations.datasets.MiraBest_F import (
 
 class FineTuning_DataModule(pl.LightningDataModule):
     def __init__(self, config):
-        super().__init__(config["finetune"]["data_path"], config["finetune"]["batch_size"])
+        super().__init__()
 
         # override default paths via config if desired
         paths = Path_Handler(**config.get("paths_to_override", {}))
